@@ -7,7 +7,7 @@ from streamlit_gsheets import GSheetsConnection
 PASSWORD_ADMIN = "Mondiali2026!" 
 
 # !!! INCOLLA QUI IL LINK DEL TUO FOGLIO GOOGLE !!!
-URL_FOGLIO = "https://docs.google.com/spreadsheets/d/1eTUSnDcgBlD4C0Vn6KpZKJ9PZrHcKlVGF4pmAmKt3PM/edit?gid=1816355816#gid=1816355816"
+URL_FOGLIO = "https://docs.google.com/spreadsheets/d/1eTUSnDcgBlD4C0Vn6KpZKJ9PZrHcKlVGF4pmAmKt3PM/edit?usp=sharing"
 
 DATI_SQUADRE = {
     "Francia": 5.50, "Spagna": 5.50, "Inghilterra": 7.50, "Brasile": 9.00, "Argentina": 9.00,
