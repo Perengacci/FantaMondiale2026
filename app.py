@@ -136,13 +136,16 @@ elif modalita == "🔮 Inserisci Pronostico":
                     st.balloons()
                     st.rerun()
 
-# --- SCHERMATA 3: AREA ADMIN ---
+# --- SCHERMATA 3: AREA ADMIN (Sostituisci da qui in poi nel tuo app.py) ---
 elif modalita == "⚙️ Area Admin":
     st.subheader("Pannello Organizzatore")
     pass_inserita = st.text_input("Password:", type="password")
     
     if pass_inserita == PASSWORD_ADMIN:
         st.success("Accesso Consentito.")
+        
+        # --- SEZIONE GESTIONE RISULTATI ---
+        st.markdown("### 🏆 Aggiorna Podio Reale")
         opzioni_admin = ["-- Seleziona --"] + list(DATI_SQUADRE.keys())
         
         idx1 = opzioni_admin.index(podio_reale_corrente[0]) if podio_reale_corrente[0] in opzioni_admin else 0
@@ -161,8 +164,21 @@ elif modalita == "⚙️ Area Admin":
                 salva_tutto(st.session_state.dati_gioco)
                 st.success("Risultati reali aggiornati!")
                 st.rerun()
+        
+        # --- NUOVA SEZIONE: CANCELLAZIONE GIOCATORI ---
+        st.divider()
+        st.markdown("### 🗑️ Gestione Partecipanti")
+        if giocatori_salvati:
+            giocatore_da_eliminare = st.selectbox("Seleziona un giocatore da rimuovere:", list(giocatori_salvati.keys()))
+            if st.button(f"Elimina definitivamente {giocatore_da_eliminare}", type="primary"):
+                del st.session_state.dati_gioco["giocatori"][giocatore_da_eliminare]
+                salva_tutto(st.session_state.dati_gioco)
+                st.warning(f"Giocatore {giocatore_da_eliminare} rimosso dal database.")
+                st.rerun()
+        else:
+            st.write("Nessun giocatore presente nel database.")
                 
-        # TRUCCO DI BACKUP: Mostra il codice JSON da copiare in caso di emergenza server
+        # TRUCCO DI BACKUP
         st.divider()
         st.subheader("📦 Backup Codice Dati")
         st.caption("Se il server si riavvia, puoi incollare questo codice nei segreti per non perdere nulla:")
