@@ -1,12 +1,11 @@
 import streamlit as st
 import math
-import pandas as pd
-from streamlit_gsheets import GSheetsConnection
+import json
+import os
 
 # --- 1. CONFIGURAZIONE E DATABASE ---
 PASSWORD_ADMIN = "Mondiali2026!" 
 
-# Elenco squadre ufficiale con quote aggiornate
 DATI_SQUADRE = {
     "Francia": 5.50, "Spagna": 5.50, "Inghilterra": 7.50, "Brasile": 9.00, "Argentina": 9.00,
     "Portogallo": 11.00, "Germania": 14.00, "Paesi Bassi": 21.00, "Belgio": 26.00, "Uruguay": 29.00,
@@ -14,45 +13,38 @@ DATI_SQUADRE = {
     "Austria": 51.00, "USA": 61.00, "Messico": 61.00, "Marocco": 61.00, "Giappone": 81.00
 }
 
-# Inizializzazione della connessione nativa a Google Sheets (legge dai Secrets)
-conn = st.connection("gsheets", type=GSheetsConnection)
+FILE_LOCAL_DB = "database_fanta.json"
 
-def carica_pronostici():
+def carica_tutto():
+    if not os.path.exists(FILE_LOCAL_DB):
+        return {"risultati_reali": ["-- Seleziona --", "-- Seleziona --", "-- Seleziona --"], "giocatori": {}}
     try:
-        # Legge la scheda 'pronostici', ignorando la cache (ttl=0) per dati sempre freschi
-        df = conn.read(worksheet="pronostici", ttl=0)
-        # Se il foglio è vuoto o ha solo le intestazioni, restituisce un dizionario vuoto
-        if df.empty or len(df) == 0:
-            return {}
-        # Rimuove righe completamente vuote per sicurezza
-        df = df.dropna(subset=["Giocatore"])
-        return df.set_index("Giocatore").to_dict(orient="index")
-    except Exception as e:
-        return {}
-
-def carica_risultati_reali():
-    try:
-        df = conn.read(worksheet="admin", ttl=0)
-        if not df.empty and len(df) > 0:
-            return [df.iloc[0]["R1"], df.iloc[0]["R2"], df.iloc[0]["R3"]]
+        with open(FILE_LOCAL_DB, "r", encoding="utf-8") as f:
+            return json.load(f)
     except:
-        pass
-    return ["-- Seleziona --", "-- Seleziona --", "-- Seleziona --"]
+        return {"risultati_reali": ["-- Seleziona --", "-- Seleziona --", "-- Seleziona --"], "giocatori": {}}
 
-# --- 2. LOGICA MATEMATICA DEL PUNTEGGIO ---
+def salva_tutto(dati):
+    with open(FILE_LOCAL_DB, "w", encoding="utf-8") as f:
+        json.dump(dati, f, indent=4, ensure_ascii=False)
+
+# Carichiamo i dati all'avvio
+if "dati_gioco" not in st.session_state:
+    st.session_state.dati_gioco = carica_tutto()
+
+# --- 2. LOGICA MATEMATICA ---
 def calcola_coefficiente(quota):
     if quota < 5:
         return 1.0
     return round(1 + math.sqrt((quota - 5) / 3), 2)
 
 def calcola_punti_scelta(posizione_pronosticata, squadra_scelta, podio_reale):
-    if pd.isna(squadra_scelta) or squadra_scelta not in podio_reale or "-- Seleziona --" in podio_reale:
+    if not squadra_scelta or squadra_scelta not in podio_reale or "-- Seleziona --" in podio_reale:
         return 0.0
     
     pos_reale = podio_reale.index(squadra_scelta) + 1
     distanza = abs(posizione_pronosticata - pos_reale)
     
-    # Punteggio Base iniziale
     if posizione_pronosticata == 1:
         punti_base = 100
     elif posizione_pronosticata == 2:
@@ -60,7 +52,6 @@ def calcola_punti_scelta(posizione_pronosticata, squadra_scelta, podio_reale):
     else:
         punti_base = 50
         
-    # Applicazione riduzione per distanza (40% se dist=1, 60% se dist=2)
     if distanza == 1:
         punti_base *= 0.60
     elif distanza == 2:
@@ -69,11 +60,10 @@ def calcola_punti_scelta(posizione_pronosticata, squadra_scelta, podio_reale):
     quota = DATI_SQUADRE.get(squadra_scelta, 5.50)
     return round(punti_base * calcola_coefficiente(quota), 2)
 
-# --- 3. INTERFACCIA UTENTE (STREAMLIT) ---
+# --- 3. INTERFACCIA UTENTE ---
 st.set_page_config(page_title="Fanta-Mondiale 2026", layout="centered")
 st.title("🏆 Fanta-Mondiale 2026")
 
-# Generazione dinamica dei testi dei menu a tendina con i moltiplicatori visibili
 opzioni_formattate = ["-- Seleziona --"]
 mapping_scelte = {"-- Seleziona --": "-- Seleziona --"}
 for squadra, quota in DATI_SQUADRE.items():
@@ -82,30 +72,28 @@ for squadra, quota in DATI_SQUADRE.items():
     opzioni_formattate.append(testo)
     mapping_scelte[testo] = squadra
 
-# Navigazione laterale
 modalita = st.sidebar.radio("Navigazione", ["📊 Classifica & Quote", "🔮 Inserisci Pronostico", "⚙️ Area Admin"])
 
-# Caricamento centralizzato dei dati dal Cloud di Google
-giocatori_salvati = carica_pronostici()
-podio_reale_corrente = carica_risultati_reali()
+giocatori_salvati = st.session_state.dati_gioco["giocatori"]
+podio_reale_corrente = st.session_state.dati_gioco["risultati_reali"]
 
-# --- SCHERMATA 1: CLASSIFICA & QUOTE ---
+# --- SCHERMATA 1: CLASSIFICA ---
 if modalita == "📊 Classifica & Quote":
     tab1, tab2 = st.tabs(["📈 Classifica Generale", "📋 Tabellone Quote"])
     
     with tab1:
         if "-- Seleziona --" in podio_reale_corrente:
-            st.info("I risultati reali non sono ancora stati inseriti dall'organizzatore. Sotto vedi i pronostici attuali.")
+            st.info("I risultati reali non sono ancora stati inseriti. Sotto vedi i pronostici attuali.")
         
         tabella_classifica = []
         for nome, prono in giocatori_salvati.items():
-            p1 = calcola_punti_scelta(1, prono["P1"], podio_reale_corrente)
-            p2 = calcola_punti_scelta(2, prono["P2"], podio_reale_corrente)
-            p3 = calcola_punti_scelta(3, prono["P3"], podio_reale_corrente)
+            p1 = calcola_punti_scelta(1, prono[0], podio_reale_corrente)
+            p2 = calcola_punti_scelta(2, prono[1], podio_reale_corrente)
+            p3 = calcola_punti_scelta(3, prono[2], podio_reale_corrente)
             totale = round(p1 + p2 + p3, 2)
             
             tabella_classifica.append({
-                "Giocatore": nome, "1° Posto": prono["P1"], "2° Posto": prono["P2"], "3° Posto": prono["P3"], "Punti": totale
+                "Giocatore": nome, "1° Posto": prono[0], "2° Posto": prono[1], "3° Posto": prono[2], "Punti": totale
             })
             
         if tabella_classifica:
@@ -115,21 +103,19 @@ if modalita == "📊 Classifica & Quote":
             st.write("Nessun giocatore ha ancora inserito un pronostico.")
 
     with tab2:
-        st.subheader("Moltiplicatori Ufficiali delle Squadre")
         elenco_quote = [{"Squadra": sq, "Quota Vincente": qta, "Moltiplicatore (CD)": calcola_coefficiente(qta)} for sq, qta in DATI_SQUADRE.items()]
         st.dataframe(elenco_quote, use_container_width=True)
 
 # --- SCHERMATA 2: INSERIMENTO PRONOSTICO ---
 elif modalita == "🔮 Inserisci Pronostico":
     st.subheader("Inserisci la tua giocata bloccata")
-    nome_utente = st.text_input("Inserisci il tuo Nome e Cognome (es. Mario Rossi):").strip()
+    nome_utente = st.text_input("Inserisci il tuo Nome e Cognome:").strip()
     
     if nome_utente:
         if nome_utente in giocatori_salvati:
             scelte = giocatori_salvati[nome_utente]
             st.warning(f"Hai già salvato il tuo pronostico, {nome_utente}!")
-            st.success(f"Il tuo podio blindato è: 1° **{scelte['P1']}** | 2° **{scelte['P2']}** | 3° **{scelte['P3']}**")
-            st.caption("Per ragioni di sicurezza e correttezza, non puoi modificare un pronostico esistente.")
+            st.success(f"Il tuo podio blindato è: 1° **{scelte[0]}** | 2° **{scelte[1]}** | 3° **{scelte[2]}**")
         else:
             p1_f = st.selectbox("Chi vincerà il Mondiale? (1°)", opzioni_formattate, key="user_p1")
             p2_f = st.selectbox("Chi arriverà 2°?", opzioni_formattate, key="user_p2")
@@ -139,28 +125,21 @@ elif modalita == "🔮 Inserisci Pronostico":
             
             if st.button("Salva Pronostico"):
                 if "-- Seleziona --" in [p1, p2, p3]:
-                    st.error("Devi completare tutte e tre le posizioni del podio!")
+                    st.error("Devi completare tutto il podio!")
                 elif len(set([p1, p2, p3])) < 3:
-                    st.error("Non puoi inserire squadre duplicate nello stesso podio!")
+                    st.error("Non puoi inserire squadre duplicate!")
                 else:
-                    # Legge lo storico esistente, appende la nuova riga e carica su Google Sheets
-                    try:
-                        df_esistente = conn.read(worksheet="pronostici", ttl=0)
-                    except:
-                        df_esistente = pd.DataFrame(columns=["Giocatore", "P1", "P2", "P3"])
-                        
-                    nuovo_prono = pd.DataFrame([{"Giocatore": nome_utente, "P1": p1, "P2": p2, "P3": p3}])
-                    df_aggiornato = pd.concat([df_esistente, nuovo_prono], ignore_index=True)
-                    conn.update(worksheet="pronostici", data=df_aggiornato)
-                    
-                    st.success("Pronostico salvato con successo su Google Sheets!")
+                    # Salviamo nello stato interno ed emaniamo il salvataggio su file
+                    st.session_state.dati_gioco["giocatori"][nome_utente] = [p1, p2, p3]
+                    salva_tutto(st.session_state.dati_gioco)
+                    st.success("Pronostico blindato con successo!")
                     st.balloons()
                     st.rerun()
 
 # --- SCHERMATA 3: AREA ADMIN ---
 elif modalita == "⚙️ Area Admin":
     st.subheader("Pannello Organizzatore")
-    pass_inserita = st.text_input("Password Amministratore:", type="password")
+    pass_inserita = st.text_input("Password:", type="password")
     
     if pass_inserita == PASSWORD_ADMIN:
         st.success("Accesso Consentito.")
@@ -178,9 +157,15 @@ elif modalita == "⚙️ Area Admin":
             if len(set([adm_1, adm_2, adm_3])) < 3 and adm_1 != "-- Seleziona --":
                 st.error("Il podio reale non può contenere squadre duplicate!")
             else:
-                df_admin = pd.DataFrame([{"R1": adm_1, "R2": adm_2, "R3": adm_3}])
-                conn.update(worksheet="admin", data=df_admin)
-                st.success("Risultati reali aggiornati su Google Sheets! Classifiche ricalcolate.")
+                st.session_state.dati_gioco["risultati_reali"] = [adm_1, adm_2, adm_3]
+                salva_tutto(st.session_state.dati_gioco)
+                st.success("Risultati reali aggiornati!")
                 st.rerun()
+                
+        # TRUCCO DI BACKUP: Mostra il codice JSON da copiare in caso di emergenza server
+        st.divider()
+        st.subheader("📦 Backup Codice Dati")
+        st.caption("Se il server si riavvia, puoi incollare questo codice nei segreti per non perdere nulla:")
+        st.code(json.dumps(st.session_state.dati_gioco, indent=2))
     elif pass_inserita != "":
         st.error("Password errata.")
