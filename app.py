@@ -21,7 +21,8 @@ def carica_tutto():
             return json.loads(st.secrets["dati_backup"]["json_string"])
         except:
             pass
-if not os.path.exists(FILE_LOCAL_DB):
+
+    if not os.path.exists(FILE_LOCAL_DB):
         return {"risultati_reali": ["-- Seleziona --", "-- Seleziona --", "-- Seleziona --"], "giocatori": {}}
     try:
         with open(FILE_LOCAL_DB, "r", encoding="utf-8") as f:
