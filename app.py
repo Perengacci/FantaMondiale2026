@@ -16,12 +16,11 @@ DATI_SQUADRE = {
 FILE_LOCAL_DB = "database_fanta.json"
 
 def carica_tutto():
- if "dati_backup" in st.secrets and "json_string" in st.secrets["dati_backup"]:
+    if "dati_backup" in st.secrets and "json_string" in st.secrets["dati_backup"]:
         try:
             return json.loads(st.secrets["dati_backup"]["json_string"])
         except:
             pass
-   
 if not os.path.exists(FILE_LOCAL_DB):
         return {"risultati_reali": ["-- Seleziona --", "-- Seleziona --", "-- Seleziona --"], "giocatori": {}}
     try:
